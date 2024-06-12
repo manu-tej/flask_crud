@@ -3,6 +3,10 @@ from flask import Flask, request, jsonify, send_from_directory, Response
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
+from elasticsearch import Elasticsearch
+
+# Initialize Elasticsearch client with hosts parameter
+es = Elasticsearch(hosts=["http://localhost:9200"])
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -20,6 +24,15 @@ def index():
     print("Serving index.html at root")
     return send_from_directory('static', 'index.html')
 
+# Index data
+def index_data():
+    cursor.execute("SELECT * FROM items")
+    items = cursor.fetchall()
+    for item in items:
+        es.index(index='items', doc_type='_doc', id=item['id'], body=item)
+
+index_data()
+
 # Create an item
 @app.route('/items', methods=['POST'])
 def create_item():
@@ -29,6 +42,7 @@ def create_item():
     cursor.execute('INSERT INTO items (name, description) VALUES (%s, %s) RETURNING *;', (name, description))
     new_item = cursor.fetchone()
     conn.commit()
+    es.index(index='items', doc_type='_doc', id=new_item['id'], body=new_item)
     return jsonify(new_item), 201
 
 # Read all items
@@ -54,6 +68,7 @@ def update_item(id):
     cursor.execute('UPDATE items SET name = %s, description = %s WHERE id = %s RETURNING *;', (name, description, id))
     updated_item = cursor.fetchone()
     conn.commit()
+    es.index(index='items', doc_type='_doc', id=updated_item['id'], body=updated_item)
     return jsonify(updated_item)
 
 # Delete an item
@@ -62,6 +77,7 @@ def delete_item(id):
     cursor.execute('DELETE FROM items WHERE id = %s RETURNING *;', (id,))
     deleted_item = cursor.fetchone()
     conn.commit()
+    es.delete(index='items', doc_type='_doc', id=id)
     return jsonify(deleted_item)
 
 @app.route('/interface')
@@ -71,9 +87,18 @@ def serve_interface():
 
 @app.route('/search', methods=['GET'])
 def search_items():
-    query = request.args.get('query', '')
-    cursor.execute("SELECT * FROM items WHERE name ILIKE %s OR description ILIKE %s", (f'%{query}%', f'%{query}%'))
-    items = cursor.fetchall()
+    query = request.get('query', '')
+    search_body = {
+        "query": {
+            "multi_match": {
+                "query": query,
+                "fields": ["name", "description"],
+                "fuzziness": "AUTO"
+            }
+        }
+    }
+    results = es.search(index='items', body=search_body)
+    items = [hit['_source'] for hit in results['hits']['hits']]
     return jsonify(items)
 
 @app.route('/suggestions', methods=['GET'])
