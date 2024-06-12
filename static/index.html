@@ -1,0 +1,286 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostgreSQL CRUD Interface</title>
+    <style>
+        /* Additional styles for the suggestions dropdown */
+        .suggestions {
+            border: 1px solid #ccc;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .suggestion-item {
+            padding: 8px;
+            cursor: pointer;
+        }
+        .suggestion-item:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>PostgreSQL CRUD Interface</h1>
+
+    <h2>Create Item</h2>
+    <form id="create-form">
+        <label for="create-name">Name:</label>
+        <input type="text" id="create-name" name="name" required>
+        <label for="create-description">Description:</label>
+        <input type="text" id="create-description" name="description" required>
+        <button type="submit">Create</button>
+    </form>
+
+    <h2>Read Items</h2>
+    <button id="read-button">Read All Items</button>
+    <table id="items-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <h2>Search Items</h2>
+    <form id="search-form">
+        <label for="search-query">Search:</label>
+        <input type="text" id="search-query" name="query" required autocomplete="off">
+        <div class="suggestions" id="search-suggestions"></div>
+        <button type="submit">Search</button>
+    </form>
+
+    <h2>Update Item</h2>
+    <form id="update-form">
+        <label for="update-id">ID:</label>
+        <select id="update-id" name="id" required></select>
+        <label for="update-name">Name:</label>
+        <input type="text" id="update-name" name="name" required>
+        <label for="update-description">Description:</label>
+        <input type="text" id="update-description" name="description" required>
+        <button type="submit">Update</button>
+    </form>
+
+    <h2>Delete Item</h2>
+    <form id="delete-form">
+        <label for="delete-id">ID:</label>
+        <select id="delete-id" name="id" required></select>
+        <button type="submit">Delete</button>
+    </form>
+
+    <!-- JavaScript code at the end of the body -->
+    <script>
+        const apiUrl = 'http://127.0.0.1:5000/items';
+        const searchUrl = 'http://127.0.0.1:5000/search';
+        const suggestionsUrl = 'http://127.0.0.1:5000/suggestions';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("JavaScript is running");
+
+            const fetchAndDisplayItems = () => {
+                console.log('Fetching and displaying items');
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', apiUrl, true);
+                xhr.onreadystatechange = function() {
+                    console.log('XHR readyState:', xhr.readyState);
+                    if (xhr.readyState === 4) {
+                        console.log('XHR request made');
+                        if (xhr.status === 200) {
+                            var items = JSON.parse(xhr.responseText);
+                            console.log('Fetched items:', items);
+
+                            const itemsTable = document.querySelector('#items-table tbody');
+                            const updateIdDropdown = document.getElementById('update-id');
+                            const deleteIdDropdown = document.getElementById('delete-id');
+                            
+                            itemsTable.innerHTML = '';
+                            updateIdDropdown.innerHTML = '';
+                            deleteIdDropdown.innerHTML = '';
+
+                            items.forEach(item => {
+                                console.log('Appending item to table:', item);
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.description}</td>`;
+                                itemsTable.appendChild(tr);
+
+                                const optionUpdate = document.createElement('option');
+                                optionUpdate.value = item.id;
+                                optionUpdate.textContent = item.id;
+                                updateIdDropdown.appendChild(optionUpdate);
+
+                                const optionDelete = document.createElement('option');
+                                optionDelete.value = item.id;
+                                optionDelete.textContent = item.id;
+                                deleteIdDropdown.appendChild(optionDelete);
+                            });
+                        } else {
+                            console.error('Error fetching items:', xhr.statusText);
+                        }
+                    }
+                };
+                xhr.send();
+            };
+
+            const fetchAndDisplaySuggestions = (query) => {
+                console.log('Fetching suggestions for:', query);
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', `${suggestionsUrl}?query=${query}`, true);
+                xhr.onreadystatechange = function() {
+                    console.log('XHR readyState:', xhr.readyState);
+                    if (xhr.readyState === 4) {
+                        console.log('XHR request made for suggestions');
+                        if (xhr.status === 200) {
+                            var suggestions = JSON.parse(xhr.responseText);
+                            console.log('Fetched suggestions:', suggestions);
+
+                            const suggestionsContainer = document.getElementById('search-suggestions');
+                            suggestionsContainer.innerHTML = '';
+                            suggestions.forEach(item => {
+                                const div = document.createElement('div');
+                                div.className = 'suggestion-item';
+                                div.textContent = `${item.name} - ${item.description}`;
+                                div.addEventListener('click', () => {
+                                    document.getElementById('search-query').value = item.name;
+                                    suggestionsContainer.innerHTML = '';
+                                });
+                                suggestionsContainer.appendChild(div);
+                            });
+                        } else {
+                            console.error('Error fetching suggestions:', xhr.statusText);
+                        }
+                    }
+                };
+                xhr.send();
+            };
+
+            document.getElementById('read-button').addEventListener('click', fetchAndDisplayItems);
+
+            document.getElementById('search-query').addEventListener('input', function() {
+                const query = this.value;
+                console.log('Input event fired, query:', query);
+                if (query.length > 0) {
+                    fetchAndDisplaySuggestions(query);
+                } else {
+                    document.getElementById('search-suggestions').innerHTML = '';
+                }
+            });
+
+            document.getElementById('search-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                const query = document.getElementById('search-query').value;
+                console.log('Search form submitted', { query });
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', `${searchUrl}?query=${query}`, true);
+                xhr.onreadystatechange = function() {
+                    console.log('XHR readyState:', xhr.readyState);
+                    if (xhr.readyState === 4) {
+                        console.log('XHR request made for search');
+                        if (xhr.status === 200) {
+                            var items = JSON.parse(xhr.responseText);
+                            console.log('Search results:', items);
+
+                            const itemsTable = document.querySelector('#items-table tbody');
+                            itemsTable.innerHTML = '';
+
+                            items.forEach(item => {
+                                console.log('Appending item to table:', item);
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `<td>${item.id}</td><td>${item.name}</td><td>${item.description}</td>`;
+                                itemsTable.appendChild(tr);
+                            });
+                        } else {
+                            console.error('Error searching items:', xhr.statusText);
+                        }
+                    }
+                };
+                xhr.send();
+            });
+
+            document.getElementById('create-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                const name = document.getElementById('create-name').value;
+                const description = document.getElementById('create-description').value;
+                console.log('Create form submitted', { name, description });
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', apiUrl, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.onreadystatechange = function() {
+                    console.log('XHR readyState:', xhr.readyState);
+                    if (xhr.readyState === 4) {
+                        console.log('XHR request made for create');
+                        if (xhr.status === 201) {
+                            var result = JSON.parse(xhr.responseText);
+                            console.log('Created:', result);
+                            fetchAndDisplayItems();  // Refresh table and dropdowns
+                        } else {
+                            console.error('Error creating item:', xhr.statusText);
+                        }
+                    }
+                };
+                xhr.send(JSON.stringify({ name, description }));
+            });
+
+            document.getElementById('update-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                console.log('Update form submitted');
+                const id = document.getElementById('update-id').value;
+                const name = document.getElementById('update-name').value;
+                const description = document.getElementById('update-description').value;
+                console.log('Update button clicked', { id, name, description });
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('PUT', `${apiUrl}/${id}`, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.onreadystatechange = function() {
+                    console.log('XHR readyState:', xhr.readyState);
+                    if (xhr.readyState === 4) {
+                        console.log('XHR request made for update');
+                        if (xhr.status === 200) {
+                            var result = JSON.parse(xhr.responseText);
+                            console.log('Updated:', result);
+                            fetchAndDisplayItems();  // Refresh table and dropdowns
+                        } else {
+                            console.error('Error updating item:', xhr.statusText);
+                        }
+                    }
+                };
+                xhr.send(JSON.stringify({ name, description }));
+            });
+
+            document.getElementById('delete-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                console.log('Delete form submitted');
+                const id = document.getElementById('delete-id').value;
+                console.log('Delete button clicked', { id });
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('DELETE', `${apiUrl}/${id}`, true);
+                xhr.onreadystatechange = function() {
+                    console.log('XHR readyState:', xhr.readyState);
+                    if (xhr.readyState === 4) {
+                        console.log('XHR request made for delete');
+                        if (xhr.status === 200) {
+                            var result = JSON.parse(xhr.responseText);
+                            console.log('Deleted:', result);
+                            fetchAndDisplayItems();  // Refresh table and dropdowns
+                        } else {
+                            console.error('Error deleting item:', xhr.statusText);
+                        }
+                    }
+                };
+                xhr.send();
+            });
+
+            // Initial fetch and display
+            fetchAndDisplayItems();
+        });
+    </script>
+</body>
+</html>
