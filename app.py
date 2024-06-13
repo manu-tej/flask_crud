@@ -6,7 +6,7 @@ import json
 from elasticsearch import Elasticsearch
 
 # Initialize Elasticsearch client with hosts parameter
-es = Elasticsearch(hosts=["http://localhost:9200"])
+es = Elasticsearch(hosts=["https://localhost:9200"], ca_certs="/Users/manuarrojwala/http_ca.crt", basic_auth=("elastic", "8TifduA1pgGizu-rKMO="))
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -29,7 +29,7 @@ def index_data():
     cursor.execute("SELECT * FROM items")
     items = cursor.fetchall()
     for item in items:
-        es.index(index='items', doc_type='_doc', id=item['id'], body=item)
+        es.index(index='items', id=item['id'], body=item)
 
 index_data()
 
@@ -42,7 +42,7 @@ def create_item():
     cursor.execute('INSERT INTO items (name, description) VALUES (%s, %s) RETURNING *;', (name, description))
     new_item = cursor.fetchone()
     conn.commit()
-    es.index(index='items', doc_type='_doc', id=new_item['id'], body=new_item)
+    es.index(index='items', id=new_item['id'], body=new_item)
     return jsonify(new_item), 201
 
 # Read all items
@@ -68,7 +68,7 @@ def update_item(id):
     cursor.execute('UPDATE items SET name = %s, description = %s WHERE id = %s RETURNING *;', (name, description, id))
     updated_item = cursor.fetchone()
     conn.commit()
-    es.index(index='items', doc_type='_doc', id=updated_item['id'], body=updated_item)
+    es.index(index='items', id=updated_item['id'], body=updated_item)
     return jsonify(updated_item)
 
 # Delete an item
@@ -77,7 +77,7 @@ def delete_item(id):
     cursor.execute('DELETE FROM items WHERE id = %s RETURNING *;', (id,))
     deleted_item = cursor.fetchone()
     conn.commit()
-    es.delete(index='items', doc_type='_doc', id=id)
+    es.delete(index='items', id=id)
     return jsonify(deleted_item)
 
 @app.route('/interface')
@@ -87,7 +87,7 @@ def serve_interface():
 
 @app.route('/search', methods=['GET'])
 def search_items():
-    query = request.get('query', '')
+    query = request.args.get('query', '')
     search_body = {
         "query": {
             "multi_match": {
